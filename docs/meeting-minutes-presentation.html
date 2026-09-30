@@ -1,0 +1,867 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenSlides Protokoll-Assistent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 16:9-Folienbühne, skaliert über Container-Einheiten; auf schmalen Screens werden die Folien untereinander gestapelt. */
+:root {
+  --bg: #e9eeee;
+  --paper: #fbfcfc;
+  --ink: #15262a;
+  --muted: #53686c;
+  --line: #d2dcdd;
+  --accent: #0b6e72;
+  --accent-soft: #dcecec;
+  --warn: #a8701a;
+  --warn-soft: #f6ead3;
+  --ok: #2c7a4c;
+  --ok-soft: #dcefe3;
+  --bad: #b0412d;
+  --bad-soft: #f6e0db;
+  --sp1: #0b6e72;
+  --sp2: #c28a26;
+  --sp3: #7a4f8a;
+  --sp4: #3f6694;
+  --shadow: 0 1px 2px rgba(20, 40, 44, .06), 0 12px 40px rgba(20, 40, 44, .10);
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1315; --paper: #121d20; --ink: #e2ebeb; --muted: #93a7a9; --line: #273a3e;
+    --accent: #52c3c4; --accent-soft: #163a3c; --warn: #e2a84d; --warn-soft: #3a2e17;
+    --ok: #62c08a; --ok-soft: #173424; --bad: #e57a63; --bad-soft: #3d1f19;
+    --sp1: #52c3c4; --sp2: #e2a84d; --sp3: #b88fc8; --sp4: #7ea3d6;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 40px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1315; --paper: #121d20; --ink: #e2ebeb; --muted: #93a7a9; --line: #273a3e;
+  --accent: #52c3c4; --accent-soft: #163a3c; --warn: #e2a84d; --warn-soft: #3a2e17;
+  --ok: #62c08a; --ok-soft: #173424; --bad: #e57a63; --bad-soft: #3d1f19;
+  --sp1: #52c3c4; --sp2: #e2a84d; --sp3: #b88fc8; --sp4: #7ea3d6;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 40px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Bühne ---------- */
+.deck {
+  --fs: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-inline: 16px;
+  padding-block: 20px 88px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.stage { display: contents; }
+.slide {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--fs) * .5);
+  box-shadow: var(--shadow);
+  padding: calc(var(--fs) * 2.2) calc(var(--fs) * 1.6);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--fs) * 1.1);
+  font-size: var(--fs);
+  line-height: 1.45;
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (min-width: 760px) and (min-height: 430px) {
+  .deck {
+    height: 100%;
+    max-width: none;
+    padding-block: 16px 76px;
+    align-items: center;
+    justify-content: center;
+  }
+  .stage {
+    display: block;
+    width: min(100%, calc((100vh - 110px) * 16 / 9));
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    container-type: inline-size;
+    position: relative;
+  }
+  .slide {
+    --fs: 1.42cqw;
+    position: absolute;
+    inset: 0;
+    padding: calc(var(--fs) * 2.6) calc(var(--fs) * 3.2) calc(var(--fs) * 2.4);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(1.2%);
+    transition: opacity .28s ease, transform .28s ease, visibility 0s linear .28s;
+  }
+  .slide.is-active {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity .28s ease, transform .28s ease, visibility 0s;
+  }
+  .slide.is-before { transform: translateX(-1.2%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide, .slide.is-active { transition: none !important; transform: none !important; }
+}
+
+/* ---------- Typografie ---------- */
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: calc(var(--fs) * .72);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  display: flex;
+  gap: .8em;
+  align-items: center;
+}
+.eyebrow .ts { color: var(--muted); letter-spacing: .04em; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+h1 { font-size: calc(var(--fs) * 3.6); line-height: 1.02; font-weight: 800; letter-spacing: -.025em; }
+h2 { font-size: calc(var(--fs) * 2.05); line-height: 1.1; font-weight: 700; }
+h3 { font-size: calc(var(--fs) * 1.08); line-height: 1.2; font-weight: 700; }
+p { margin: 0; }
+.lead { font-size: calc(var(--fs) * 1.2); color: var(--muted); max-width: 44em; line-height: 1.4; }
+.muted { color: var(--muted); }
+.small { font-size: calc(var(--fs) * .82); }
+.mono { font-family: var(--f-mono); font-size: .9em; }
+ul.clean { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--fs) * .45); }
+ul.clean li { padding-left: 1.1em; position: relative; }
+ul.clean li::before {
+  content: ""; position: absolute; left: 0; top: .62em;
+  width: .42em; height: .42em; border-radius: 50%; background: var(--accent);
+}
+code, .code { font-family: var(--f-mono); font-size: .86em; background: var(--accent-soft); color: var(--ink); padding: .08em .35em; border-radius: .3em; }
+
+.grid { display: grid; gap: calc(var(--fs) * 1.1); min-width: 0; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g-7-5 { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.fill { flex: 1; min-height: 0; }
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: calc(var(--fs) * .45);
+  padding: calc(var(--fs) * .9) calc(var(--fs) * 1);
+  display: flex; flex-direction: column; gap: calc(var(--fs) * .4);
+  min-width: 0;
+}
+.panel.tint { background: var(--accent-soft); border-color: transparent; }
+.panel h3 { display: flex; gap: .5em; align-items: baseline; }
+.num {
+  font-family: var(--f-mono); font-size: calc(var(--fs) * .75); color: var(--accent);
+  font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+.foot {
+  margin-top: auto;
+  display: flex; justify-content: space-between; gap: 1em;
+  font-family: var(--f-mono); font-size: calc(var(--fs) * .66); color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: calc(var(--fs) * .6);
+}
+
+/* ---------- Tabellen ---------- */
+.tbl-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: calc(var(--fs) * .9); }
+th, td { text-align: left; vertical-align: top; padding: calc(var(--fs) * .45) calc(var(--fs) * .7); border-bottom: 1px solid var(--line); }
+th { font-family: var(--f-mono); font-size: .78em; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td:first-child { font-weight: 700; white-space: nowrap; }
+
+/* ---------- Titelfolie ---------- */
+.title-slide { justify-content: space-between; }
+.title-slide h1 span { color: var(--accent); }
+.rec {
+  display: inline-flex; align-items: center; gap: .5em;
+  font-family: var(--f-mono); font-size: calc(var(--fs) * .78);
+  color: var(--bad); background: var(--bad-soft);
+  padding: .25em .7em; border-radius: 99px; width: fit-content;
+}
+.rec i { width: .6em; height: .6em; border-radius: 50%; background: var(--bad); display: block; animation: blink 1.6s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .rec i { animation: none; } }
+
+.timeline { display: grid; gap: calc(var(--fs) * .5); }
+.tl-canvas { width: 100%; height: calc(var(--fs) * 5.5); display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: .4em 1.4em; font-size: calc(var(--fs) * .8); color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: .45em; }
+.legend b { width: .8em; height: .8em; border-radius: .2em; display: inline-block; }
+
+/* ---------- Kennwerte ---------- */
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.fact { padding: calc(var(--fs) * .8) calc(var(--fs) * 1) calc(var(--fs) * .8) 0; display: grid; gap: .2em; border-bottom: 1px solid var(--line); }
+.fact dt { font-family: var(--f-mono); font-size: calc(var(--fs) * .68); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.fact dd { margin: 0; font-weight: 600; }
+
+/* ---------- Architektur ---------- */
+.arch { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 3.6fr) minmax(0, 1.4fr) minmax(0, 3.6fr); align-items: stretch; gap: 0; }
+.zone { border: 1.5px solid var(--line); border-radius: calc(var(--fs) * .5); padding: calc(var(--fs) * .8); display: flex; flex-direction: column; gap: calc(var(--fs) * .45); min-width: 0; }
+.zone.new { border-color: var(--accent); border-style: dashed; background: var(--accent-soft); }
+.zone-title { font-family: var(--f-mono); font-size: calc(var(--fs) * .68); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.zone.new .zone-title { color: var(--accent); }
+.chip {
+  border: 1px solid var(--line); background: var(--paper); border-radius: calc(var(--fs) * .35);
+  padding: calc(var(--fs) * .35) calc(var(--fs) * .6); font-size: calc(var(--fs) * .85);
+}
+.chip b { display: block; font-size: 1em; }
+.chip small { color: var(--muted); font-size: .85em; display: block; line-height: 1.3; }
+.chip.plus { border-color: var(--accent); }
+.link {
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: calc(var(--fs) * 1.4);
+  padding-inline: calc(var(--fs) * .3); text-align: center;
+  font-family: var(--f-mono); font-size: calc(var(--fs) * .62); color: var(--muted);
+}
+.arrow { display: grid; gap: .25em; width: 100%; }
+.arrow::after { content: ""; height: 1.5px; background: var(--muted); display: block; position: relative; }
+.arrow.r { --dir: "→"; }
+.arrow span { line-height: 1.25; }
+.arrow em { font-style: normal; color: var(--ink); font-size: 1.3em; line-height: 1; }
+
+/* ---------- Pipeline ---------- */
+.pipe { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--fs) * .5); counter-reset: step; }
+.step { border-top: 3px solid var(--accent); padding-top: calc(var(--fs) * .6); display: grid; gap: calc(var(--fs) * .35); align-content: start; min-width: 0; }
+.step .num { font-size: calc(var(--fs) * .9); }
+.step h3 { font-size: calc(var(--fs) * 1); }
+.step p { font-size: calc(var(--fs) * .84); color: var(--muted); }
+.step .tool { font-family: var(--f-mono); font-size: calc(var(--fs) * .7); color: var(--ink); background: var(--accent-soft); padding: .2em .45em; border-radius: .3em; width: fit-content; max-width: 100%; }
+
+/* ---------- Transkript-Beispiel ---------- */
+.transcript { font-family: var(--f-mono); font-size: calc(var(--fs) * .78); display: grid; gap: calc(var(--fs) * .4); background: var(--bg); border-radius: calc(var(--fs) * .45); padding: calc(var(--fs) * .8); min-width: 0; }
+.tr-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3em 1em; }
+.tr-row .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tr-row .who { font-weight: 600; display: flex; flex-wrap: wrap; gap: .6em; align-items: center; }
+.tr-row .txt { grid-column: 2; font-family: var(--f-body); font-size: 1.12em; color: var(--ink); }
+.conf { font-size: .85em; padding: .05em .5em; border-radius: 99px; font-weight: 600; }
+.conf.ok { background: var(--ok-soft); color: var(--ok); }
+.conf.warn { background: var(--warn-soft); color: var(--warn); }
+.conf.bad { background: var(--bad-soft); color: var(--bad); }
+
+.lights { display: grid; gap: calc(var(--fs) * .4); }
+.light { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .8em; align-items: baseline; }
+
+/* ---------- Szenarien ---------- */
+.tag { font-family: var(--f-mono); font-size: .72em; padding: .1em .5em; border-radius: 99px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; font-weight: 600; }
+
+/* ---------- Datenmodell ---------- */
+.model { font-family: var(--f-mono); font-size: calc(var(--fs) * .72); line-height: 1.5; }
+.model b { color: var(--accent); font-weight: 600; }
+.model .f { color: var(--muted); }
+.act { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .2em 1em; font-size: calc(var(--fs) * .8); }
+.act span:nth-child(odd) { font-family: var(--f-mono); font-size: .92em; overflow-wrap: anywhere; }
+.pill { font-family: var(--f-mono); font-size: .78em; padding: .05em .55em; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); height: fit-content; }
+.pill.int { border-color: var(--warn); color: var(--warn); }
+
+/* ---------- Sequenz ---------- */
+.seq { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(var(--fs) * 1); }
+.seq-col { display: grid; gap: calc(var(--fs) * .5); align-content: start; }
+.seq-col h3 { font-size: calc(var(--fs) * .95); padding-bottom: .4em; border-bottom: 2px solid var(--ink); }
+.seq-col .chip { font-size: calc(var(--fs) * .8); }
+
+/* ---------- Laufzeitdiagramm ---------- */
+.chart { display: grid; gap: calc(var(--fs) * .55); }
+.bar-row { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 1em; align-items: center; font-size: calc(var(--fs) * .88); }
+.track { position: relative; height: calc(var(--fs) * 1.5); background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: 25% 100%; border-right: 1px solid var(--line); }
+.range { position: absolute; top: 18%; bottom: 18%; background: var(--accent); border-radius: 99px; opacity: .85; }
+.range.total { background: var(--ink); opacity: 1; }
+.range-label { position: absolute; top: 50%; transform: translateY(-50%); font-family: var(--f-mono); font-size: calc(var(--fs) * .72); color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; padding-left: .5em; }
+.axis { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 1em; font-size: calc(var(--fs) * .88); }
+.axis-ticks { position: relative; height: 1.4em; font-family: var(--f-mono); font-size: .78em; color: var(--muted); }
+.axis-ticks span { position: absolute; transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.axis-ticks span:last-child { transform: translateX(-100%); }
+.axis-ticks span:first-child { transform: none; }
+
+/* ---------- Phasen ---------- */
+.phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--fs) * .8); }
+.phase { border: 1px solid var(--line); border-radius: calc(var(--fs) * .45); padding: calc(var(--fs) * .75) calc(var(--fs) * .9); display: grid; gap: calc(var(--fs) * .35); align-content: start; }
+.phase.gate { border-color: var(--accent); background: var(--accent-soft); }
+.phase .pt { font-family: var(--f-mono); font-size: calc(var(--fs) * .75); color: var(--muted); font-variant-numeric: tabular-nums; display: flex; justify-content: space-between; gap: 1em; }
+.pt-bar { height: 4px; background: var(--line); border-radius: 99px; position: relative; }
+.pt-bar i { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: var(--accent); }
+.pt-bar i.lo { background: var(--accent); }
+.pt-bar i.hi { background: var(--accent); opacity: .35; }
+.phase p { font-size: calc(var(--fs) * .84); color: var(--muted); }
+.total-line { display: flex; flex-wrap: wrap; gap: .4em 1.5em; align-items: baseline; }
+.big { font-family: var(--f-display); font-weight: 800; font-size: calc(var(--fs) * 2.2); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+.law { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--fs) * .8) calc(var(--fs) * 1.4); }
+.law-item { display: grid; gap: .25em; border-left: 2px solid var(--warn); padding-left: calc(var(--fs) * .8); }
+.law-item b { font-family: var(--f-mono); font-size: calc(var(--fs) * .75); color: var(--warn); letter-spacing: .02em; }
+.note { font-size: calc(var(--fs) * .8); color: var(--muted); border: 1px dashed var(--line); padding: .5em .8em; border-radius: .4em; }
+
+.q { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .15em .9em; }
+.q .num { padding-top: .2em; }
+
+/* ---------- Steuerleiste ---------- */
+.controls {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  display: flex; justify-content: center; align-items: center; gap: 10px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(6px);
+  z-index: 5;
+}
+.controls button {
+  font: 600 14px/1 var(--f-body); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; cursor: pointer;
+  min-width: 44px;
+}
+.controls button:hover { border-color: var(--accent); color: var(--accent); }
+.controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.controls button:disabled { opacity: .4; cursor: default; }
+.counter { font-family: var(--f-mono); font-size: 13px; color: var(--muted); min-width: 5.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.progress { position: fixed; left: 0; top: 0; height: 3px; background: var(--accent); transition: width .25s ease; z-index: 6; }
+.stack-only { display: none; }
+.deck-only { display: inline-flex; }
+@media not all and (min-width: 760px) and (min-height: 430px) {
+  .controls, .progress { display: none; }
+  .deck { padding-block: 20px 32px; }
+  .stack-only { display: block; }
+  .g2, .g3, .g4, .g-7-5, .law, .phases, .seq, .facts { grid-template-columns: minmax(0, 1fr); }
+  .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .arch { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .link { flex-direction: row; gap: 1em; padding-block: 4px; }
+  .bar-row, .axis { grid-template-columns: minmax(0, 7em) minmax(0, 1fr); }
+  h1 { font-size: 36px; }
+  h2 { font-size: 25px; }
+}
+</style>
+</head>
+<body>
+
+<main class="deck" id="deck">
+  <div class="stage" id="stage">
+
+    <!-- 1 Titel -->
+    <section class="slide title-slide" id="s1" aria-label="Folie 1">
+      <div class="eyebrow"><span>Architekturkonzept</span><span class="ts">OpenSlides 4.3.4 · Entwurf</span></div>
+      <div class="grid" style="gap: calc(var(--fs) * 1)">
+        <span class="rec"><i></i>REC 00:47:12</span>
+        <h1>Vom Meeting-Audio zum <span>fertigen Protokoll</span> in OpenSlides</h1>
+        <p class="lead">Aufnehmen per Button oder Teams-Upload. Transkribieren, Sprecher erkennen und das Protokoll pro Tagesordnungspunkt erstellen. Alles lokal, ohne Cloud.</p>
+      </div>
+      <div class="timeline">
+        <canvas class="tl-canvas" id="tl" aria-label="Beispielhafte Sprecher-Zeitleiste eines Meetings mit vier Personen und drei Tagesordnungspunkten" role="img"></canvas>
+        <div class="legend">
+          <span><b style="background: var(--sp1)"></b>A. Keller</span>
+          <span><b style="background: var(--sp2)"></b>M. Yilmaz</span>
+          <span><b style="background: var(--sp3)"></b>J. Brandt</span>
+          <span><b style="background: var(--sp4)"></b>Teams: S. Novak</span>
+          <span class="mono">│ TOP-Marker</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 Ziel -->
+    <section class="slide" id="s2" aria-label="Folie 2">
+      <div class="eyebrow">Ziel und Rahmenbedingungen</div>
+      <h2>OpenSlides wird zum Protokollwerkzeug für Arbeitsmeetings: vor Ort, hybrid und über Teams</h2>
+      <dl class="facts fill" style="align-content: start; margin: 0">
+        <div class="fact"><dt>Verarbeitung</dt><dd>Vollständig lokal auf einem separaten PC (i7, 16–32 GB RAM, keine GPU)</dd></div>
+        <div class="fact"><dt>Einsatz</dt><dd>Arbeitskontext mit DSGVO, Betriebsrat und Einwilligungen</dd></div>
+        <div class="fact"><dt>Zeitpunkt</dt><dd>Nachträgliche Verarbeitung (Batch), keine Live-Transkription</dd></div>
+        <div class="fact"><dt>Vor Ort</dt><dd>Aufnahme per Button in OpenSlides, direkt im Browser</dd></div>
+        <div class="fact"><dt>Teams</dt><dd>Die exportierte Aufzeichnung wird hochgeladen, kein Bot im Meeting</dd></div>
+        <div class="fact"><dt>Sprecher</dt><dd>Erkennung über Stimmproben der Teilnehmenden</dd></div>
+      </dl>
+      <div class="grid g3">
+        <div class="panel tint"><h3>Wortprotokoll</h3><p class="small">Bereinigtes Transkript mit Sprechern und Zeitstempeln</p></div>
+        <div class="panel tint"><h3>Ergebnisprotokoll</h3><p class="small">Beschlüsse und Aufgaben mit Verantwortlichen und Fristen</p></div>
+        <div class="panel tint"><h3>Zusammenfassung</h3><p class="small">Kompakt für jeden Tagesordnungspunkt</p></div>
+      </div>
+    </section>
+
+    <!-- 3 Architektur -->
+    <section class="slide" id="s3" aria-label="Folie 3">
+      <div class="eyebrow">Architektur</div>
+      <h2>Ein neuer Dienst auf dem KI-PC, OpenSlides hält nur Texte und Status</h2>
+      <div class="arch fill">
+        <div class="zone">
+          <div class="zone-title">Browser</div>
+          <div class="chip"><b>Aufnahme</b><small>Mikrofon, TOP-Marker</small></div>
+          <div class="chip"><b>Upload</b><small>Teams-MP4, .vtt</small></div>
+          <div class="chip"><b>Review</b><small>Korrigieren, freigeben</small></div>
+        </div>
+        <div class="link">
+          <div class="arrow"><span>HTTPS</span><em>→</em></div>
+        </div>
+        <div class="zone">
+          <div class="zone-title">OpenSlides-Server (bestehend)</div>
+          <div class="chip plus"><b>proxy</b><small>+ Route <span class="mono">/minutes/*</span></small></div>
+          <div class="chip plus"><b>backend</b><small>+ Actions, Rechte, Upload-Token</small></div>
+          <div class="chip plus"><b>postgres</b><small>+ 4 neue Collections</small></div>
+          <div class="chip"><b>autoupdate</b><small>Fortschritt live im Client</small></div>
+        </div>
+        <div class="link">
+          <div class="arrow"><span>Audio-Upload</span><em>→</em></div>
+          <div class="arrow"><em>←</em><span>Ergebnisse über <span class="mono">/internal/ handle_request</span></span></div>
+        </div>
+        <div class="zone new">
+          <div class="zone-title">KI-PC (neu)</div>
+          <div class="chip"><b>openslides-minutes-service</b><small>FastAPI: Upload, Queue, Worker</small></div>
+          <div class="chip"><b>Pipeline</b><small>ffmpeg → Whisper → pyannote → Sprecher-ID → LLM</small></div>
+          <div class="chip"><b>Ollama / llama.cpp</b><small>Lokales Sprachmodell</small></div>
+          <div class="chip"><b>Speicher</b><small>Audio temporär, Stimmprofile verschlüsselt</small></div>
+        </div>
+      </div>
+      <div class="foot"><span>Aufnahmen und biometrische Daten verlassen den KI-PC nicht</span><span>03</span></div>
+    </section>
+
+    <!-- 4 Prinzipien -->
+    <section class="slide" id="s4" aria-label="Folie 4">
+      <div class="eyebrow">Grundprinzipien</div>
+      <h2>Vier Regeln, an denen sich jede Designentscheidung messen lässt</h2>
+      <div class="grid g2 fill" style="align-content: start">
+        <div class="panel"><h3>Audio bleibt auf dem KI-PC</h3><p class="muted">In OpenSlides landen nur Texte, Status und Zuordnungen. Der Media-Service speichert Dateien in Postgres und ist nicht für große Audiodateien gedacht.</p></div>
+        <div class="panel"><h3>Rechte prüft das Backend</h3><p class="muted">Der Minutes-Service vertraut nur kurzlebigen Upload-Tokens, die das Backend nach der Rechteprüfung ausstellt.</p></div>
+        <div class="panel"><h3>Ergebnisse über normale Actions</h3><p class="muted">Autoupdate, History und Rechte funktionieren dadurch ohne Sonderlogik. Der Fortschritt erscheint live im Client.</p></div>
+        <div class="panel"><h3>Die KI liefert einen Entwurf</h3><p class="muted">Ein Mensch prüft und gibt frei. Kein Protokoll wird ohne Review veröffentlicht.</p></div>
+      </div>
+    </section>
+
+    <!-- 5 Pipeline -->
+    <section class="slide" id="s5" aria-label="Folie 5">
+      <div class="eyebrow">Verarbeitungspipeline auf dem KI-PC</div>
+      <h2>Sechs Schritte vom Audio zum Protokollentwurf</h2>
+      <div class="pipe">
+        <div class="step"><span class="num">1</span><h3>Vorverarbeitung</h3><span class="tool">ffmpeg</span><p>Audio aus MP4 extrahieren, 16 kHz mono, Lautheit normalisieren</p></div>
+        <div class="step"><span class="num">2</span><h3>Transkription</h3><span class="tool">faster-whisper</span><p><span class="mono">large-v3-turbo</span> int8 auf CPU, Sprache de, Wort-Zeitstempel</p></div>
+        <div class="step"><span class="num">3</span><h3>Diarization</h3><span class="tool">pyannote.audio</span><p>Wer spricht wann? Ergebnis: SPEAKER_00 … n mit Zeitbereichen</p></div>
+        <div class="step"><span class="num">4</span><h3>Sprecher-ID</h3><span class="tool">Speaker-Embeddings</span><p>Abgleich mit den Stimmprofilen der Teilnehmenden</p></div>
+        <div class="step"><span class="num">5</span><h3>TOP-Zuordnung</h3><span class="tool">Marker + Redeliste</span><p>Jedes Segment bekommt einen Tagesordnungspunkt, sonst „Sonstiges“</p></div>
+        <div class="step"><span class="num">6</span><h3>Protokoll</h3><span class="tool">Ollama</span><p>Zusammenfassung, Beschlüsse und Aufgaben pro TOP als JSON</p></div>
+      </div>
+      <div class="grid g2 fill" style="align-content: end">
+        <div class="panel"><h3>Zusammenführen</h3><p class="small muted">Transkript und Diarization werden über die Zeitstempel verbunden: Jedes Wort geht an den Sprecher mit der größten Überlappung. WhisperX bündelt genau das und dient als Vorlage.</p></div>
+        <div class="panel"><h3>Wiederaufnahme</h3><p class="small muted">Jeder Schritt speichert sein Zwischenergebnis. Nach einer Sprecherkorrektur läuft nur Schritt 6 erneut. Jobs werden strikt nacheinander abgearbeitet.</p></div>
+      </div>
+    </section>
+
+    <!-- 6 Sprechererkennung -->
+    <section class="slide" id="s6" aria-label="Folie 6">
+      <div class="eyebrow">Sprechererkennung</div>
+      <h2>Stimmabdrücke statt Raten: Die LLM hört keine Stimmen, sie sieht nur Text</h2>
+      <div class="grid g-7-5 fill">
+        <div class="grid" style="align-content: start; gap: calc(var(--fs) * .8)">
+          <ul class="clean">
+            <li><b>Enrollment, einmalig:</b> ca. 30 s vorgegebenen Text lesen. Daraus entsteht ein Embedding mit 192–512 Zahlen, die Audiodatei wird sofort gelöscht.</li>
+            <li><b>Pro Meeting:</b> ein Durchschnitts-Embedding je erkanntem Sprecher, verglichen nur mit den Profilen der Teilnehmenden.</li>
+            <li><b>Zuordnung:</b> Kosinus-Ähnlichkeit, optimale 1:1-Zuordnung über den Hungarian Algorithm.</li>
+            <li><b>Zusätzliche Signale:</b> Zeitstempel der OpenSlides-Redeliste, Namen aus dem Teams-Transkript, Anreden im Text (nur als Vorschlag).</li>
+          </ul>
+          <div class="lights">
+            <div class="light"><span class="conf ok">hoch</span><span class="small">wird automatisch zugeordnet</span></div>
+            <div class="light"><span class="conf warn">mittel</span><span class="small">Vorschlag, im Review bestätigen</span></div>
+            <div class="light"><span class="conf bad">niedrig</span><span class="small">„Unbekannt 1“, manuelle Zuordnung</span></div>
+          </div>
+        </div>
+        <div class="transcript" aria-label="Beispieltranskript">
+          <div class="muted small" style="font-family: var(--f-body)">Beispiel aus der Review-Ansicht</div>
+          <div class="tr-row"><span class="t">00:14:32</span><span class="who" style="color: var(--sp1)">A. Keller <span class="conf ok">0,91</span></span><span class="txt">Dann halten wir fest: Der Umzug der Server findet im November statt.</span></div>
+          <div class="tr-row"><span class="t">00:14:41</span><span class="who" style="color: var(--sp4)">S. Novak <span class="conf ok">Teams</span></span><span class="txt">Einverstanden. Ich kläre bis Freitag die Wartungsfenster.</span></div>
+          <div class="tr-row"><span class="t">00:14:50</span><span class="who" style="color: var(--sp3)">J. Brandt? <span class="conf warn">0,63</span></span><span class="txt">Brauchen wir dafür noch eine Freigabe vom Einkauf?</span></div>
+          <div class="tr-row"><span class="t">00:14:56</span><span class="who" style="color: var(--bad)">Unbekannt 1 <span class="conf bad">0,31</span></span><span class="txt">Nein, das ist im Budget schon drin.</span></div>
+        </div>
+      </div>
+      <div class="foot"><span>Grenzen: überlappendes Sprechen, schlechte Raummikrofone, Beiträge unter 2 s. Deshalb ist das Review Pflicht.</span><span>06</span></div>
+    </section>
+
+    <!-- 7 TOP + LLM -->
+    <section class="slide" id="s7" aria-label="Folie 7">
+      <div class="eyebrow">Tagesordnung und Protokoll</div>
+      <h2>Jeder Tagesordnungspunkt wird einzeln an die LLM gegeben</h2>
+      <div class="grid g2 fill">
+        <div class="panel">
+          <h3>Zuordnung zu Tagesordnungspunkten</h3>
+          <div class="q"><span class="num">1</span><span><b>TOP-Marker:</b> Klick auf „Nächster TOP“ während der Aufnahme. Exakt und einfach.</span></div>
+          <div class="q"><span class="num">2</span><span><b>Projektor und Redeliste:</b> Wann war welcher TOP aktiv? Braucht eine zusätzliche Historie.</span></div>
+          <div class="q"><span class="num">3</span><span><b>LLM-Fallback:</b> Übergänge anhand der TOP-Titel vorschlagen, im Review verschiebbar.</span></div>
+          <div class="q"><span class="num">4</span><span>Alles ohne Zuordnung landet unter „Sonstiges“.</span></div>
+          <p class="note">Teams-Uploads haben keine Live-Marker. Hier greift Variante 3 oder das Setzen von Markern auf einer Zeitleiste im Review.</p>
+        </div>
+        <div class="panel">
+          <h3>Protokollerstellung</h3>
+          <ul class="clean small">
+            <li><b>Chunking pro TOP</b> hält den Kontext klein. Das entscheidet auf der CPU über die Laufzeit.</li>
+            <li><b>Strukturierte Ausgabe:</b> <code>summary</code>, <code>decisions[]</code>, <code>tasks[]</code>, <code>open_questions[]</code></li>
+            <li><b>Wortprotokoll ohne LLM:</b> direkt aus dem Transkript, Füllwörter entfernt. So bleibt es frei von Halluzinationen.</li>
+            <li><b>Quellverweise:</b> Jeder Beschluss und jede Aufgabe verweist auf Zeitstempel im Transkript.</li>
+            <li><b>Modell:</b> 7–9 B-Modelle mit gutem Deutsch bei 16 GB, bis ca. 14 B bei 32 GB. Vor der Wahl mit echten Transkripten vergleichen.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8 Szenarien -->
+    <section class="slide" id="s8" aria-label="Folie 8">
+      <div class="eyebrow">Aufnahmeszenarien</div>
+      <h2>Ein Weg pro Meetingform, keine zusammengeklebten Aufnahmen</h2>
+      <div class="tbl-wrap fill">
+        <table>
+          <thead><tr><th>Szenario</th><th>Empfohlener Weg</th><th>Anmerkung</th></tr></thead>
+          <tbody>
+            <tr><td>Vor Ort</td><td>Aufnahme per Button im Browser, Raum-PC mit <b>Konferenzmikrofon</b></td><td class="muted">Das Mikrofon ist der größte Qualitätshebel. Ein Laptopmikrofon reicht meist nicht.</td></tr>
+            <tr><td>Rein Teams</td><td>Aufzeichnung exportieren und hochladen, optional mit Teams-Transkript <span class="mono">.vtt</span></td><td class="muted">Das Teams-Transkript liefert die Namen mit, Stimmprofile dienen als Backup.</td></tr>
+            <tr><td>Hybrid <span class="tag">empfohlen</span></td><td>Raum ist in Teams eingewählt: wie „Rein Teams“</td><td class="muted">Der Raum ist in Teams ein Teilnehmer. Diarization und Stimmprofile trennen die Personen darin.</td></tr>
+            <tr><td>Hybrid <span class="tag">Alternative</span></td><td>Browser nimmt Mikrofon und Systemton gemeinsam auf</td><td class="muted">Funktioniert zuverlässig nur in Chrome/Edge unter Windows. Vorher testen.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Zwei getrennte Aufnahmen (Raum und Teams) zeitlich zusammenzuführen, ist bewusst nicht vorgesehen: Die Synchronisierung ist zu fehleranfällig.</p>
+    </section>
+
+    <!-- 9 Client -->
+    <section class="slide" id="s9" aria-label="Folie 9">
+      <div class="eyebrow">OpenSlides-Client</div>
+      <h2>Neues Modul „Protokolle“ in der Meeting-Navigation</h2>
+      <div class="grid g3 fill" style="align-content: start">
+        <div class="panel"><h3>Aufnahme</h3><p class="small muted">Start/Stopp mit sichtbarem Aufnahmeindikator, Mikrofonwahl, Pegel, „Nächster TOP“. Opus/WebM mit ca. 15 MB pro Stunde, Chunks alle 10 s, Puffer in IndexedDB.</p></div>
+        <div class="panel"><h3>Upload</h3><p class="small muted">Teams-Aufzeichnung (MP4/M4A) und optional das Teams-Transkript per Drag &amp; Drop.</p></div>
+        <div class="panel"><h3>Status</h3><p class="small muted">Pipeline-Fortschritt live über Autoupdate, zum Beispiel „Transkription 45 %“.</p></div>
+        <div class="panel tint"><h3>Review (Kernstück)</h3><p class="small">Transkript links, Protokoll pro TOP rechts. Sprecher korrigieren, Audiostelle abspielen, Texte bearbeiten, „Neu generieren“, „Freigeben“.</p></div>
+        <div class="panel"><h3>Export</h3><p class="small muted">PDF über die vorhandene pdfmake-Infrastruktur des Clients, optional DOCX oder Markdown.</p></div>
+        <div class="panel"><h3>Stimmprofil</h3><p class="small muted">Im Benutzerprofil: Einwilligung, 30 s Aufnahme, Status „vorhanden seit …“, Löschen.</p></div>
+      </div>
+    </section>
+
+    <!-- 10 Backend -->
+    <section class="slide" id="s10" aria-label="Folie 10">
+      <div class="eyebrow">Backend und Datenmodell</div>
+      <h2>Vier neue Collections, drei neue Rechte, interne Actions für den Rückkanal</h2>
+      <div class="grid g2 fill">
+        <div class="grid g2" style="align-content: start">
+          <div class="panel model"><span><b>minutes_recording</b></span><span class="f">Aufnahme und Job: source, state, progress, agenda_markers, speaker_mapping, audio_delete_at</span></div>
+          <div class="panel model"><span><b>minutes_transcript</b></span><span class="f">Rohtranskript: segments [start, end, speaker, meeting_user_id, text, agenda_item_id]</span></div>
+          <div class="panel model"><span><b>minutes_entry</b></span><span class="f">Protokoll pro TOP: summary, verbatim, decisions, tasks, state draft/approved</span></div>
+          <div class="panel model"><span><b>voice_profile</b></span><span class="f">Nur Metadaten: Einwilligung, Status. Keine Biometrie in OpenSlides.</span></div>
+          <div class="panel" style="grid-column: 1 / -1">
+            <h3>Rechte</h3>
+            <p class="small"><code>minutes.can_see</code> &lt; <code>minutes.can_record</code> &lt; <code>minutes.can_manage</code></p>
+            <p class="small muted">Die Freigabe erfordert <code>can_manage</code>. Dazu kommt eine Migration für die neuen Felder.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Actions</h3>
+          <div class="act">
+            <span>minutes_recording.create</span><span class="pill">public</span>
+            <span>minutes_recording.update / delete</span><span class="pill">public</span>
+            <span>minutes_recording.set_state</span><span class="pill int">internal</span>
+            <span>minutes_transcript.create</span><span class="pill int">internal</span>
+            <span>minutes_entry.create</span><span class="pill int">internal</span>
+            <span>minutes_entry.update</span><span class="pill">public</span>
+            <span>minutes_entry.approve</span><span class="pill">public</span>
+            <span>voice_profile.start_enrollment</span><span class="pill">public</span>
+            <span>voice_profile.set_state</span><span class="pill int">internal</span>
+            <span>voice_profile.delete</span><span class="pill">public</span>
+          </div>
+          <p class="small muted">Interne Actions ruft nur der Minutes-Service mit dem vorhandenen <i>internal auth password</i> auf.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11 Ablauf -->
+    <section class="slide" id="s11" aria-label="Folie 11">
+      <div class="eyebrow">Ablauf</div>
+      <h2>Von „Aufnahme starten“ bis „Freigeben“</h2>
+      <div class="seq fill">
+        <div class="seq-col">
+          <h3>Aufnehmen</h3>
+          <div class="chip"><b>Start</b><small><span class="mono">minutes_recording.create</span> gibt ID und Upload-Token zurück</small></div>
+          <div class="chip"><b>Audio-Chunks</b><small>direkt an den Minutes-Service, mit Token</small></div>
+          <div class="chip"><b>„Nächster TOP“</b><small>speichert Marker im Backend</small></div>
+        </div>
+        <div class="seq-col">
+          <h3>Verarbeiten</h3>
+          <div class="chip"><b>Stopp</b><small>Upload abschließen, Job in die Queue</small></div>
+          <div class="chip"><b>Status-Updates</b><small><span class="mono">set_state</span>: transcribing 30 % …</small></div>
+          <div class="chip"><b>Autoupdate</b><small>zeigt den Fortschritt live an</small></div>
+        </div>
+        <div class="seq-col">
+          <h3>Ergebnis</h3>
+          <div class="chip"><b>Transkript</b><small><span class="mono">minutes_transcript.create</span></small></div>
+          <div class="chip"><b>Protokollentwurf</b><small><span class="mono">minutes_entry.create</span> je TOP</small></div>
+          <div class="chip"><b>Status „review“</b><small>Benachrichtigung im Client</small></div>
+        </div>
+        <div class="seq-col">
+          <h3>Freigeben</h3>
+          <div class="chip"><b>Korrigieren</b><small>Sprecher, Texte, TOP-Grenzen</small></div>
+          <div class="chip"><b>Neu generieren</b><small>nur der LLM-Schritt läuft erneut</small></div>
+          <div class="chip plus"><b>Freigeben</b><small>schreibgeschützt; Audio wird nach Frist gelöscht</small></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12 Hardware -->
+    <section class="slide" id="s12" aria-label="Folie 12">
+      <div class="eyebrow">Hardware und Laufzeiten</div>
+      <h2>Eine Stunde Meeting ist auf einem i7 ohne GPU am selben Tag fertig</h2>
+      <div class="grid g-7-5 fill">
+        <div class="chart" role="img" aria-label="Geschätzte Laufzeiten in Minuten für eine Stunde Meeting">
+          <div class="small muted">Geschätzte Minuten für 1 Stunde Audio (per Benchmark zu prüfen)</div>
+          <div class="bar-row"><span>Whisper large-v3-turbo</span><div class="track"><div class="range" style="left: 25%; width: 25%"></div><span class="range-label" style="left: 50%">30–60</span></div></div>
+          <div class="bar-row"><span>Whisper medium</span><div class="track"><div class="range" style="left: 16.667%; width: 16.667%"></div><span class="range-label" style="left: 33.333%">20–40</span></div></div>
+          <div class="bar-row"><span>pyannote + Embeddings</span><div class="track"><div class="range" style="left: 4.167%; width: 12.5%"></div><span class="range-label" style="left: 16.667%">5–20</span></div></div>
+          <div class="bar-row"><span>LLM 8 B, ca. 8 TOPs</span><div class="track"><div class="range" style="left: 8.333%; width: 16.667%"></div><span class="range-label" style="left: 25%">10–30</span></div></div>
+          <div class="bar-row"><b>Gesamt</b><div class="track"><div class="range total" style="left: 37.5%; width: 54.167%"></div><span class="range-label" style="left: 91.667%">45–110</span></div></div>
+          <div class="axis"><span></span><div class="axis-ticks"><span style="left: 0%">0</span><span style="left: 25%">30</span><span style="left: 50%">60</span><span style="left: 75%">90</span><span style="left: 100%">120 min</span></div></div>
+        </div>
+        <div class="grid" style="align-content: start">
+          <div class="panel tint"><h3>Empfehlung: 32 GB RAM</h3><p class="small">16 GB reichen, wenn die Schritte nacheinander laufen und ein 7–8 B-Modell genutzt wird. Dazu SSD, Linux mit Docker und kabelgebundenes LAN.</p></div>
+          <div class="panel"><h3>Optionales Upgrade</h3><p class="small muted">Eine gebrauchte GPU mit mindestens 12 GB VRAM (z. B. RTX 3060) beschleunigt alle Schritte grob um den Faktor 5–10.</p></div>
+          <p class="note">pyannote-Modelle einmalig über Hugging Face freigeben und laden, danach läuft alles offline.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13 Sicherheit -->
+    <section class="slide" id="s13" aria-label="Folie 13">
+      <div class="eyebrow">Sicherheit</div>
+      <h2>Der KI-PC ist abgeschottet, Audio hat ein Ablaufdatum</h2>
+      <div class="grid g3 fill" style="align-content: start">
+        <div class="panel"><h3>Netz</h3><p class="small muted">Nur im internen Netz (eigenes VLAN), nicht aus dem Internet erreichbar, nach der Modellinstallation ohne Internetzugang.</p></div>
+        <div class="panel"><h3>Transport</h3><p class="small muted">TLS zwischen Proxy und KI-PC. Upload-Tokens mit kurzer Laufzeit und festem Scope.</p></div>
+        <div class="panel"><h3>Speicher</h3><p class="small muted">Festplatte mit LUKS verschlüsselt, Stimmprofile zusätzlich auf Anwendungsebene.</p></div>
+        <div class="panel tint"><h3>Automatische Löschung</h3><p class="small">Audio wird nach der Freigabe bzw. spätestens nach X Tagen gelöscht. Das Feld <code>audio_available</code> zeigt den Stand.</p></div>
+        <div class="panel"><h3>Audit</h3><p class="small muted">Wer hat wann aufgenommen, korrigiert und freigegeben? Über die OpenSlides-History.</p></div>
+        <div class="panel"><h3>Backups</h3><p class="small muted">OpenSlides-Datenbank wie gehabt. Audio wird nicht gesichert, Stimmprofile nur verschlüsselt.</p></div>
+      </div>
+    </section>
+
+    <!-- 14 Recht -->
+    <section class="slide" id="s14" aria-label="Folie 14">
+      <div class="eyebrow">Recht und Datenschutz im Arbeitskontext</div>
+      <h2>Vor dem Produktivbetrieb mit Datenschutz und Betriebsrat klären</h2>
+      <div class="law fill" style="align-content: start">
+        <div class="law-item"><b>§ 201 StGB</b><span>Aufnahme des nicht öffentlich gesprochenen Wortes ohne Einwilligung ist strafbar. Einwilligung vor jeder Aufnahme, sichtbare Anzeige, Pflicht-Checkbox vor dem Start.</span></div>
+        <div class="law-item"><b>Art. 9 DSGVO</b><span>Stimmprofile sind biometrische Daten. Ausdrückliche, freiwillige, widerrufbare Einwilligung und eine Alternative ohne Nachteile.</span></div>
+        <div class="law-item"><b>Art. 35 DSGVO</b><span>Eine Datenschutz-Folgenabschätzung ist sehr wahrscheinlich erforderlich.</span></div>
+        <div class="law-item"><b>§ 87 Abs. 1 Nr. 6 BetrVG</b><span>Ein System, das Verhalten oder Leistung erfassen kann, ist mitbestimmungspflichtig. Vermutlich ist eine Betriebsvereinbarung nötig.</span></div>
+        <div class="law-item"><b>Teams-Richtlinien</b><span>Aufzeichnung und Export müssen im Tenant erlaubt sein. Die Teams-eigenen Hinweise gelten zusätzlich.</span></div>
+        <div class="law-item"><b>Datenminimierung</b><span>Audio und Rohtranskript nach der Freigabe löschen. Es bleibt nur das freigegebene Protokoll, das Wortprotokoll ist optional.</span></div>
+      </div>
+      <p class="note">Keine Rechtsberatung. Die Punkte zeigen, was vor dem Einsatz geklärt sein muss.</p>
+    </section>
+
+    <!-- 15 Phasen -->
+    <section class="slide" id="s15" aria-label="Folie 15">
+      <div class="eyebrow">Umsetzung</div>
+      <div class="total-line"><h2>Sechs Phasen, zuerst ein Machbarkeitstest</h2><span class="big">40–65 PT</span></div>
+      <div class="phases fill" style="align-content: start">
+        <div class="phase gate"><h3><span class="num">0</span> Proof of Concept</h3><div class="pt"><span>Go / No-Go</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Standalone-Skript mit echten Aufnahmen: Qualität, Laufzeit, Modellwahl, Mikrofon.</p></div>
+        <div class="phase"><h3><span class="num">1</span> Service + Datenmodell</h3><div class="pt"><span>Upload → Transkript</span><span>10–15 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:66.7%"></i><i class="hi" style="left:66.7%;width:33.3%"></i></div><p>Minutes-Service, Collections, Actions, Rechte, Migration, Proxy-Route.</p></div>
+        <div class="phase"><h3><span class="num">2</span> Aufnahme-Button</h3><div class="pt"><span>Vor-Ort-Meetings</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Browser-Aufnahme mit Chunk-Upload, TOP-Marker, Einwilligungsdialog.</p></div>
+        <div class="phase"><h3><span class="num">3</span> Stimmprofile</h3><div class="pt"><span>Auto-Sprecher-ID</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Enrollment-UI, Embedding-Speicher, Zuordnung und Korrektur im Review.</p></div>
+        <div class="phase"><h3><span class="num">4</span> Protokoll &amp; Review</h3><div class="pt"><span>Voller Workflow</span><span>10–15 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:66.7%"></i><i class="hi" style="left:66.7%;width:33.3%"></i></div><p>LLM pro TOP, Review-Editor, Neu generieren, Freigabe, PDF-Export.</p></div>
+        <div class="phase"><h3><span class="num">5</span> Hybrid &amp; Feinschliff</h3><div class="pt"><span>Produktionsreife</span><span>5–10 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:33.3%"></i></div><p>Teams-VTT-Import, Systemton, Löschfristen, Monitoring, Doku.</p></div>
+      </div>
+      <div class="foot"><span>PT = Personentage, grobe Schätzung für eine Person mit OpenSlides-Erfahrung. Balken: Minimum kräftig, Spanne hell, Skala bis 15 PT.</span><span>15</span></div>
+    </section>
+
+    <!-- 16 Risiken -->
+    <section class="slide" id="s16" aria-label="Folie 16">
+      <div class="eyebrow">Architekturentscheidungen und Risiken</div>
+      <h2>Das größte Risiko ist die Wartung der eigenen Forks</h2>
+      <div class="grid g2 fill">
+        <div class="grid" style="align-content: start">
+          <div class="panel">
+            <h3>Fork-Wartung</h3>
+            <p class="small muted">Backend, Client, meta und proxy sind Submodule der offiziellen OpenSlides-Repos. Die Integration braucht eigene Forks und regelmäßiges Nachziehen von Upstream-Updates.</p>
+            <ul class="clean small">
+              <li>Änderungen additiv halten: neue Collections, neues Client-Modul</li>
+              <li>KI-Logik komplett im separaten Minutes-Service</li>
+              <li>Mittelfristig mit dem OpenSlides-Team (Intevation) über einen Erweiterungspunkt sprechen</li>
+            </ul>
+          </div>
+          <div class="panel tint">
+            <h3>Alternative: leichte Integration</h3>
+            <p class="small">Eigene kleine Web-App mit OpenSlides-Login, die das freigegebene Protokoll als PDF oder Topic ins Meeting schreibt. Weniger Wartung, aber kein Button in OpenSlides und kein Live-Status.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Weitere Risiken</h3>
+          <div class="tbl-wrap">
+            <table>
+              <tbody>
+                <tr><td>Audioqualität</td><td class="muted">Einfluss größer als die Modellwahl → Konferenzmikrofon einplanen</td></tr>
+                <tr><td>CPU-Laufzeit</td><td class="muted">Mehrere Meetings pro Tag stauen sich → Priorisierung, ggf. GPU</td></tr>
+                <tr><td>Halluzinationen</td><td class="muted">Quellverweise sowie Pflicht zu Review und Freigabe</td></tr>
+                <tr><td>Browser</td><td class="muted">Tab geschlossen oder Standby → IndexedDB-Puffer, Wake Lock, Warnungen</td></tr>
+                <tr><td>Akzeptanz</td><td class="muted">Betriebsrat und Datenschutz früh einbinden</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 17 Fragen -->
+    <section class="slide" id="s17" aria-label="Folie 17">
+      <div class="eyebrow">Offene Fragen</div>
+      <h2>Was wir vor Phase 1 entscheiden müssen</h2>
+      <div class="grid g2 fill" style="align-content: start">
+        <div class="q"><span class="num">1</span><span>Wie viele Meetings pro Woche, wie lang? Davon hängen Queue-Auslegung und GPU ab.</span></div>
+        <div class="q"><span class="num">2</span><span>Gibt es eine verbindliche Protokollvorlage mit Pflichtfeldern?</span></div>
+        <div class="q"><span class="num">3</span><span>Wer darf aufnehmen, wer darf freigeben? Zuordnung zu OpenSlides-Gruppen.</span></div>
+        <div class="q"><span class="num">4</span><span>Soll das freigegebene Protokoll per E-Mail an die Teilnehmenden gehen?</span></div>
+        <div class="q"><span class="num">5</span><span>Welche Löschfristen gelten für Audio, Transkript und Protokoll?</span></div>
+        <div class="q"><span class="num">6</span><span>Ist ein Fork von Backend und Client tragbar, oder die leichte Integration?</span></div>
+      </div>
+      <div class="panel tint">
+        <h3>Nächster Schritt: Phase 0</h3>
+        <p class="small">Ein Skript auf dem KI-PC verarbeitet zwei echte Aufnahmen (Raum und Teams) zu Transkript, Sprechern und Protokoll. Danach steht fest, ob Qualität und Laufzeit für die Integration reichen.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<div class="progress" id="progress" aria-hidden="true"></div>
+<nav class="controls" aria-label="Foliennavigation">
+  <button type="button" id="prev" aria-label="Vorherige Folie">←</button>
+  <span class="counter" id="counter" aria-live="polite">1 / 17</span>
+  <button type="button" id="next" aria-label="Nächste Folie">→</button>
+  <button type="button" id="fs">Vollbild</button>
+</nav>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var counter = document.getElementById('counter');
+  var progress = document.getElementById('progress');
+  var prev = document.getElementById('prev');
+  var next = document.getElementById('next');
+  var idx = 0;
+
+  var m = /^#s(\d+)$/.exec(location.hash || '');
+  if (m) idx = Math.min(Math.max(parseInt(m[1], 10) - 1, 0), slides.length - 1);
+
+  function show(i) {
+    idx = Math.min(Math.max(i, 0), slides.length - 1);
+    slides.forEach(function (s, j) {
+      s.classList.toggle('is-active', j === idx);
+      s.classList.toggle('is-before', j < idx);
+      s.setAttribute('aria-hidden', j === idx ? 'false' : 'true');
+    });
+    counter.textContent = (idx + 1) + ' / ' + slides.length;
+    progress.style.width = ((idx + 1) / slides.length * 100) + '%';
+    prev.disabled = idx === 0;
+    next.disabled = idx === slides.length - 1;
+    try { history.replaceState(null, '', '#s' + (idx + 1)); } catch (e) {}
+  }
+
+  var deckMode = window.matchMedia('(min-width: 760px) and (min-height: 430px)');
+  function syncMode() {
+    if (!deckMode.matches) slides.forEach(function (s) { s.removeAttribute('aria-hidden'); });
+    else show(idx);
+  }
+
+  prev.addEventListener('click', function () { show(idx - 1); });
+  next.addEventListener('click', function () { show(idx + 1); });
+  document.addEventListener('keydown', function (e) {
+    if (!deckMode.matches) return;
+    if (['ArrowRight', 'PageDown', ' '].indexOf(e.key) > -1) { e.preventDefault(); show(idx + 1); }
+    else if (['ArrowLeft', 'PageUp'].indexOf(e.key) > -1) { e.preventDefault(); show(idx - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+  });
+  var tx = null;
+  document.getElementById('stage').addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
+  document.getElementById('stage').addEventListener('touchend', function (e) {
+    if (tx === null || !deckMode.matches) return;
+    var dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 50) show(idx + (dx < 0 ? 1 : -1));
+    tx = null;
+  });
+  document.getElementById('fs').addEventListener('click', function () {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(function () {});
+    } catch (e) {}
+  });
+  if (deckMode.addEventListener) deckMode.addEventListener('change', syncMode);
+  show(idx);
+  syncMode();
+
+  /* Sprecher-Zeitleiste auf der Titelfolie */
+  var canvas = document.getElementById('tl');
+  function drawTimeline() {
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var cs = getComputedStyle(document.documentElement);
+    var colors = ['--sp1', '--sp2', '--sp3', '--sp4'].map(function (v) { return cs.getPropertyValue(v).trim(); });
+    var ink = cs.getPropertyValue('--ink').trim();
+    var muted = cs.getPropertyValue('--muted').trim();
+    var W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+    var labelH = Math.max(11, H * .2);
+    var top = labelH + 4, h = H - top - 2, mid = top + h / 2;
+    var seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+    var segs = [], t = 0, sp = 0;
+    while (t < 1) {
+      var len = .012 + rnd() * .05;
+      segs.push([t, Math.min(1, t + len), sp]);
+      t += len + .002 + rnd() * .006;
+      var r = rnd();
+      sp = r < .35 ? 0 : r < .6 ? 1 : r < .8 ? 2 : 3;
+    }
+    var bw = Math.max(2, W / 260), gap = Math.max(1, bw * .45);
+    for (var x = 0; x < W; x += bw + gap) {
+      var p = x / W, c = null;
+      for (var k = 0; k < segs.length; k++) if (p >= segs[k][0] && p < segs[k][1]) { c = segs[k][2]; break; }
+      var amp = c === null ? .06 : (.25 + .75 * Math.abs(Math.sin(x * .13) * Math.cos(x * .041)) * (.6 + rnd() * .4));
+      ctx.fillStyle = c === null ? muted : colors[c];
+      ctx.globalAlpha = c === null ? .4 : 1;
+      var bh = Math.max(2, amp * h);
+      ctx.fillRect(x, mid - bh / 2, bw, bh);
+    }
+    ctx.globalAlpha = 1;
+    var tops = [[0, 'TOP 1 Serverumzug'], [.36, 'TOP 2 Budget 2027'], [.71, 'TOP 3 Verschiedenes']];
+    ctx.font = '600 ' + Math.round(labelH * .78) + 'px "JetBrains Mono", ui-monospace, monospace';
+    ctx.textBaseline = 'top';
+    tops.forEach(function (tp) {
+      var px = Math.round(tp[0] * W) + .5;
+      ctx.fillStyle = ink;
+      ctx.fillRect(px, 0, 1.5, H);
+      ctx.fillText(tp[1], px + 6, 0);
+    });
+  }
+  drawTimeline();
+  window.addEventListener('resize', drawTimeline);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawTimeline);
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  if (mq.addEventListener) mq.addEventListener('change', drawTimeline);
+  new MutationObserver(drawTimeline).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.addEventListener('beforeprint', drawTimeline);
+  slides[0].addEventListener('transitionend', drawTimeline);
+})();
+</script>
+</body>
+</html>
