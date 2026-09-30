@@ -635,8 +635,42 @@ td:first-child { font-weight: 700; white-space: nowrap; }
       </div>
     </section>
 
-    <!-- 13 Sicherheit -->
+    <!-- 13 Deployment -->
     <section class="slide" id="s13" aria-label="Folie 13">
+      <div class="eyebrow">Automatisiertes Deployment</div>
+      <h2>Ein Skript auf Debian oder Fedora, danach ist der KI-PC einsatzbereit</h2>
+      <div class="grid g-7-5 fill">
+        <div class="grid" style="align-content: start; gap: calc(var(--fs) * .8)">
+          <div class="transcript" aria-label="Installationsbefehl">
+            <div><span class="muted">$</span> sudo bash install.sh \</div>
+            <div>&nbsp;&nbsp;--openslides-url https://openslides.firma.local \</div>
+            <div>&nbsp;&nbsp;--allow-from 10.0.20.15</div>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th>Schritt</th><th>Debian</th><th>Fedora</th></tr></thead>
+              <tbody>
+                <tr><td>Paketquelle</td><td class="muted">apt</td><td class="muted">dnf</td></tr>
+                <tr><td>Container</td><td class="muted">Docker Engine + Compose</td><td class="muted">Docker Engine (Podman optional)</td></tr>
+                <tr><td>Firewall</td><td class="muted">nftables / ufw</td><td class="muted">firewalld-Zone</td></tr>
+                <tr><td>Besonderheit</td><td class="muted">keine</td><td class="muted">SELinux-Label an den Volumes</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="small muted">Hardware prüfen (RAM, AVX2, Speicher) · Secret erzeugen · Modell nach RAM wählen · systemd-Autostart · warten, bis alles bereit ist · URL und Secret für OpenSlides ausgeben. Das Skript ist wiederholbar und löscht keine Daten.</p>
+        </div>
+        <div class="grid" style="align-content: start">
+          <div class="chip"><b>ollama</b><small>stellt die LLM bereit, nur intern erreichbar</small></div>
+          <div class="chip plus"><b>model-init</b><small>Einmal-Container: lädt LLM, Whisper und pyannote, überspringt vorhandene Modelle</small></div>
+          <div class="chip"><b>minutes-service</b><small>startet erst, wenn alle Modelle bereit sind</small></div>
+          <p class="small"><code>--update</code> · <code>--status</code> · <code>--offline bundle.tar</code> · <code>--uninstall</code></p>
+          <p class="note">Einmalig manuell: Hugging-Face-Token für pyannote, oder die Modelle kommen über das Offline-Paket.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14 Sicherheit -->
+    <section class="slide" id="s14" aria-label="Folie 14">
       <div class="eyebrow">Sicherheit</div>
       <h2>Der KI-PC ist abgeschottet, Audio hat ein Ablaufdatum</h2>
       <div class="grid g3 fill" style="align-content: start">
@@ -650,7 +684,7 @@ td:first-child { font-weight: 700; white-space: nowrap; }
     </section>
 
     <!-- 14 Recht -->
-    <section class="slide" id="s14" aria-label="Folie 14">
+    <section class="slide" id="s15" aria-label="Folie 15">
       <div class="eyebrow">Recht und Datenschutz im Arbeitskontext</div>
       <h2>Vor dem Produktivbetrieb mit Datenschutz und Betriebsrat klären</h2>
       <div class="law fill" style="align-content: start">
@@ -665,22 +699,22 @@ td:first-child { font-weight: 700; white-space: nowrap; }
     </section>
 
     <!-- 15 Phasen -->
-    <section class="slide" id="s15" aria-label="Folie 15">
+    <section class="slide" id="s16" aria-label="Folie 16">
       <div class="eyebrow">Umsetzung</div>
-      <div class="total-line"><h2>Sechs Phasen, zuerst ein Machbarkeitstest</h2><span class="big">40–65 PT</span></div>
+      <div class="total-line"><h2>Sechs Phasen, zuerst ein Machbarkeitstest</h2><span class="big">42–69 PT</span></div>
       <div class="phases fill" style="align-content: start">
-        <div class="phase gate"><h3><span class="num">0</span> Proof of Concept</h3><div class="pt"><span>Go / No-Go</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Standalone-Skript mit echten Aufnahmen: Qualität, Laufzeit, Modellwahl, Mikrofon.</p></div>
-        <div class="phase"><h3><span class="num">1</span> Service + Datenmodell</h3><div class="pt"><span>Upload → Transkript</span><span>10–15 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:66.7%"></i><i class="hi" style="left:66.7%;width:33.3%"></i></div><p>Minutes-Service, Collections, Actions, Rechte, Migration, Proxy-Route.</p></div>
-        <div class="phase"><h3><span class="num">2</span> Aufnahme-Button</h3><div class="pt"><span>Vor-Ort-Meetings</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Browser-Aufnahme mit Chunk-Upload, TOP-Marker, Einwilligungsdialog.</p></div>
-        <div class="phase"><h3><span class="num">3</span> Stimmprofile</h3><div class="pt"><span>Auto-Sprecher-ID</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:20%"></i></div><p>Enrollment-UI, Embedding-Speicher, Zuordnung und Korrektur im Review.</p></div>
-        <div class="phase"><h3><span class="num">4</span> Protokoll &amp; Review</h3><div class="pt"><span>Voller Workflow</span><span>10–15 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:66.7%"></i><i class="hi" style="left:66.7%;width:33.3%"></i></div><p>LLM pro TOP, Review-Editor, Neu generieren, Freigabe, PDF-Export.</p></div>
-        <div class="phase"><h3><span class="num">5</span> Hybrid &amp; Feinschliff</h3><div class="pt"><span>Produktionsreife</span><span>5–10 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:33.3%"></i><i class="hi" style="left:33.3%;width:33.3%"></i></div><p>Teams-VTT-Import, Systemton, Löschfristen, Monitoring, Doku.</p></div>
+        <div class="phase gate"><h3><span class="num">0</span> Proof of Concept</h3><div class="pt"><span>Go / No-Go</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:25%"></i><i class="hi" style="left:25%;width:15%"></i></div><p>Standalone-Skript mit echten Aufnahmen: Qualität, Laufzeit, Modellwahl, Mikrofon.</p></div>
+        <div class="phase"><h3><span class="num">1</span> Service + Datenmodell</h3><div class="pt"><span>Upload → Transkript</span><span>12–19 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:60%"></i><i class="hi" style="left:60%;width:35%"></i></div><p>Minutes-Service, Collections, Actions, Rechte, Migration, Proxy-Route, Installationsskript.</p></div>
+        <div class="phase"><h3><span class="num">2</span> Aufnahme-Button</h3><div class="pt"><span>Vor-Ort-Meetings</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:25%"></i><i class="hi" style="left:25%;width:15%"></i></div><p>Browser-Aufnahme mit Chunk-Upload, TOP-Marker, Einwilligungsdialog.</p></div>
+        <div class="phase"><h3><span class="num">3</span> Stimmprofile</h3><div class="pt"><span>Auto-Sprecher-ID</span><span>5–8 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:25%"></i><i class="hi" style="left:25%;width:15%"></i></div><p>Enrollment-UI, Embedding-Speicher, Zuordnung und Korrektur im Review.</p></div>
+        <div class="phase"><h3><span class="num">4</span> Protokoll &amp; Review</h3><div class="pt"><span>Voller Workflow</span><span>10–15 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:50%"></i><i class="hi" style="left:50%;width:25%"></i></div><p>LLM pro TOP, Review-Editor, Neu generieren, Freigabe, PDF-Export.</p></div>
+        <div class="phase"><h3><span class="num">5</span> Hybrid &amp; Feinschliff</h3><div class="pt"><span>Produktionsreife</span><span>5–10 PT</span></div><div class="pt-bar"><i class="lo" style="left:0;width:25%"></i><i class="hi" style="left:25%;width:25%"></i></div><p>Teams-VTT-Import, Systemton, Löschfristen, Monitoring, Doku.</p></div>
       </div>
-      <div class="foot"><span>PT = Personentage, grobe Schätzung für eine Person mit OpenSlides-Erfahrung. Balken: Minimum kräftig, Spanne hell, Skala bis 15 PT.</span><span>15</span></div>
+      <div class="foot"><span>PT = Personentage, grobe Schätzung für eine Person mit OpenSlides-Erfahrung. Balken: Minimum kräftig, Spanne hell, Skala bis 20 PT.</span><span>16</span></div>
     </section>
 
     <!-- 16 Risiken -->
-    <section class="slide" id="s16" aria-label="Folie 16">
+    <section class="slide" id="s17" aria-label="Folie 17">
       <div class="eyebrow">Architekturentscheidungen und Risiken</div>
       <h2>Das größte Risiko ist die Wartung der eigenen Forks</h2>
       <div class="grid g2 fill">
@@ -717,7 +751,7 @@ td:first-child { font-weight: 700; white-space: nowrap; }
     </section>
 
     <!-- 17 Fragen -->
-    <section class="slide" id="s17" aria-label="Folie 17">
+    <section class="slide" id="s18" aria-label="Folie 18">
       <div class="eyebrow">Offene Fragen</div>
       <h2>Was wir vor Phase 1 entscheiden müssen</h2>
       <div class="grid g2 fill" style="align-content: start">
@@ -740,7 +774,7 @@ td:first-child { font-weight: 700; white-space: nowrap; }
 <div class="progress" id="progress" aria-hidden="true"></div>
 <nav class="controls" aria-label="Foliennavigation">
   <button type="button" id="prev" aria-label="Vorherige Folie">←</button>
-  <span class="counter" id="counter" aria-live="polite">1 / 17</span>
+  <span class="counter" id="counter" aria-live="polite">1 / 18</span>
   <button type="button" id="next" aria-label="Nächste Folie">→</button>
   <button type="button" id="fs">Vollbild</button>
 </nav>

@@ -17,7 +17,7 @@ Festgelegte Rahmenbedingungen:
 | Thema | Entscheidung |
 |---|---|
 | Verarbeitung | **Vollständig lokal** auf einem separaten PC (i7, 16–32 GB RAM, keine GPU). Keine Cloud-KI. |
-| Einsatz | Arbeitskontext (→ DSGVO, Betriebsrat, Einwilligungen, siehe Kapitel 10) |
+| Einsatz | Arbeitskontext (→ DSGVO, Betriebsrat, Einwilligungen, siehe Kapitel 11) |
 | Teams | Die Aufzeichnung aus Teams wird exportiert und in OpenSlides hochgeladen. Es gibt **keinen** Bot im Meeting. |
 | Vor Ort | Die Aufnahme wird **per Button in OpenSlides** im Browser gestartet (Client-PC mit Mikrofon). |
 | Zeitpunkt | Die Verarbeitung erfolgt **nachträglich** (Batch). Eine Live-Transkription ist nicht nötig. |
@@ -388,7 +388,78 @@ Download über Hugging Face. Danach laufen sie vollständig offline.
 
 ---
 
-## 8. Sicherheit
+## 8. Automatisiertes Deployment (Debian / Fedora)
+
+Voraussetzung: Debian (ab 12) oder Fedora (aktuelle Version) ist bereits
+installiert und im Netz erreichbar. Ab dort läuft alles über **ein
+Installationsskript**. Das Betriebssystem selbst wird nicht angefasst.
+
+```bash
+curl -fsSLO https://<intern>/openslides-minutes/install.sh
+sudo bash install.sh --openslides-url https://openslides.firma.local \
+                     --allow-from 10.0.20.15
+```
+
+### 8.1 Was das Skript macht
+
+| # | Schritt | Debian | Fedora |
+|---|---|---|---|
+| 1 | Distribution erkennen | `/etc/os-release` → `apt` | `/etc/os-release` → `dnf` |
+| 2 | Hardware prüfen | RAM, freier Speicher (≥ 60 GB), CPU mit AVX2 | wie Debian |
+| 3 | Container-Laufzeit | Docker Engine + Compose-Plugin aus dem offiziellen Docker-Repo | Docker Engine aus dem offiziellen Repo (Podman als Option, siehe 8.4) |
+| 4 | Verzeichnisse | `/opt/openslides-minutes` (Compose, `.env`), `/var/lib/openslides-minutes` (Modelle, Daten) | wie Debian, zusätzlich SELinux-Kontext (`:Z` an den Volumes) |
+| 5 | Konfiguration erzeugen | `.env` mit zufälligem Secret (`openssl rand`), OpenSlides-URL, Löschfristen; **Modellwahl nach RAM** (< 24 GB → 7–8 B, sonst bis 14 B) | wie Debian |
+| 6 | Firewall | `nftables`/`ufw`: Port des Dienstes nur für den OpenSlides-Server | `firewalld`: eigene Zone nur für den OpenSlides-Server |
+| 7 | Dienste starten | `docker compose up -d` | wie Debian |
+| 8 | Autostart | systemd-Unit `openslides-minutes.service` (startet Compose beim Booten) | wie Debian |
+| 9 | Warten und prüfen | Health-Check, bis alle Modelle geladen sind (Fortschrittsanzeige) | wie Debian |
+| 10 | Abschluss | gibt URL und Secret für die Eintragung in OpenSlides aus | wie Debian |
+
+Das Skript ist **idempotent**: Ein erneuter Aufruf repariert oder aktualisiert
+die Installation, ohne Daten oder Stimmprofile zu löschen.
+
+### 8.2 Container-Aufbau (`docker-compose.yml`)
+
+| Dienst | Aufgabe | Start |
+|---|---|---|
+| `ollama` | stellt die LLM bereit (nur intern erreichbar) | immer, `restart: unless-stopped` |
+| `model-init` | Einmal-Container: `ollama pull <modell>`, lädt Whisper- und pyannote-Modelle, prüft Prüfsummen, beendet sich | nach `ollama`, bei jedem Start (überspringt vorhandene Modelle) |
+| `minutes-service` | API, Queue, Pipeline | erst wenn `model-init` erfolgreich war (`depends_on: condition: service_completed_successfully`) |
+
+Die Modelle liegen in einem persistenten Volume. Ein Neustart oder ein
+Update lädt sie nicht erneut.
+
+### 8.3 Betrieb
+
+- **Update:** `sudo bash install.sh --update` holt neue Images und startet neu.
+- **Modellwechsel:** `LLM_MODEL` in `.env` ändern, dann `--update`.
+  `model-init` lädt das neue Modell, das alte kann mit `--prune-models`
+  entfernt werden.
+- **Status:** `install.sh --status` bzw. die Health-Anzeige in der
+  OpenSlides-Organisationsverwaltung („KI-PC bereit, Modell X geladen“).
+- **Deinstallation:** `install.sh --uninstall` (fragt, ob Daten und
+  Stimmprofile gelöscht werden sollen).
+
+### 8.4 Varianten und Grenzen
+
+- **Podman statt Docker (Fedora):** Fedora bringt Podman mit. Möglich über
+  `podman compose` oder Quadlet-Units für systemd. Das bedeutet einen zweiten
+  Pfad zum Testen. Deshalb ist Docker auf beiden Systemen der Standard.
+- **Offline-Installation:** Falls der KI-PC schon beim Einrichten kein
+  Internet haben darf, baut `build-bundle.sh` auf einem Rechner mit
+  Internet ein Paket mit Images und Modellen (grob 10–20 GB). Danach
+  installiert `install.sh --offline bundle.tar` ohne Netzzugriff.
+- **pyannote:** Der Download erfordert einmalig ein Hugging-Face-Token mit
+  akzeptierten Nutzungsbedingungen (`--hf-token` beim Aufruf). Alternativ
+  kommen die Modelle über das Offline-Paket; die Lizenz ist dafür vorher zu
+  prüfen.
+- **Mehrere KI-PCs:** Für mehrere Maschinen kann dieselbe Logik als
+  Ansible-Rolle bereitgestellt werden.
+- **Aufwand:** ca. 2–4 PT, enthalten in Phase 1 (Kapitel 12).
+
+---
+
+## 9. Sicherheit
 
 - Der KI-PC steht nur im internen Netz (eigenes VLAN), ist nicht aus dem
   Internet erreichbar und hat nach der Modellinstallation keinen
@@ -406,7 +477,7 @@ Download über Hugging Face. Danach laufen sie vollständig offline.
 
 ---
 
-## 9. Konfiguration
+## 10. Konfiguration
 
 - **Organisationsweit:** URL des Minutes-Service, Secret, Standardmodelle,
   Löschfrist, Schwellwerte der Sprechererkennung.
@@ -416,7 +487,7 @@ Download über Hugging Face. Danach laufen sie vollständig offline.
 
 ---
 
-## 10. Recht und Datenschutz im Arbeitskontext (vor dem Produktivbetrieb klären)
+## 11. Recht und Datenschutz im Arbeitskontext (vor dem Produktivbetrieb klären)
 
 > Keine Rechtsberatung, aber diese Punkte **müssen** vor dem Einsatz mit
 > Datenschutzbeauftragten und gegebenenfalls Betriebsrat geklärt werden.
@@ -444,7 +515,7 @@ Download über Hugging Face. Danach laufen sie vollständig offline.
 
 ---
 
-## 11. Umsetzungsphasen
+## 12. Umsetzungsphasen
 
 Aufwände sind grobe Schätzungen in Personentagen (PT) für eine Person, die
 OpenSlides bereits kennt.
@@ -452,19 +523,19 @@ OpenSlides bereits kennt.
 | Phase | Inhalt | Ergebnis | Aufwand |
 |---|---|---|---|
 | **0 – Proof of Concept** | Standalone-Skript auf dem KI-PC: Datei → Whisper → pyannote → Stimmprofil-Abgleich → LLM → Markdown. Tests mit echten Aufnahmen (Raum + Teams). | Belastbare Aussagen zu Qualität, Laufzeit, Modellwahl und Mikrofon. **Go/No-Go.** | 5–8 PT |
-| **1 – Service + Datenmodell** | `openslides-minutes-service` (API, Queue, Pipeline aus Phase 0), neue Collections/Actions/Rechte/Migration, Proxy-Route | Datei-Upload in OpenSlides → Transkript sichtbar | 10–15 PT |
+| **1 – Service + Datenmodell** | `openslides-minutes-service` (API, Queue, Pipeline aus Phase 0), neue Collections/Actions/Rechte/Migration, Proxy-Route, Installationsskript für Debian/Fedora (Kapitel 8) | Datei-Upload in OpenSlides → Transkript sichtbar | 12–19 PT |
 | **2 – Aufnahme-Button** | Browser-Aufnahme mit Chunk-Upload, TOP-Marker, Einwilligungsdialog | Vor-Ort-Meetings direkt aus OpenSlides | 5–8 PT |
 | **3 – Stimmprofile** | Enrollment-UI, Embedding-Speicher, automatische Zuordnung, Korrektur im Review | Automatische Sprechererkennung | 5–8 PT |
 | **4 – Protokoll & Review** | LLM-Schritt pro TOP, Review-Editor, Neu-Generieren, Freigabe, PDF-Export | Vollständiger Protokoll-Workflow | 10–15 PT |
 | **5 – Hybrid & Feinschliff** | Teams-VTT-Import, Systemton-Aufnahme, Löschfristen, Monitoring, Doku | Produktionsreife | 5–10 PT |
 
-**Gesamt: ca. 40–65 PT.** Phase 0 ist bewusst vorgeschaltet: Wenn die
+**Gesamt: ca. 42–69 PT.** Phase 0 ist bewusst vorgeschaltet: Wenn die
 Transkriptionsqualität mit dem vorhandenen Mikrofon oder die Laufzeit auf der
 CPU nicht reicht, sollte das vor dem Integrationsaufwand feststehen.
 
 ---
 
-## 12. Architekturentscheidungen und Risiken
+## 13. Architekturentscheidungen und Risiken
 
 **Wartung des Forks (wichtigstes Risiko).** Dieses Repository bindet
 `openslides-backend`, `openslides-client`, `meta` und `openslides-proxy` als
@@ -497,11 +568,11 @@ Wartung, aber keinen Button direkt in OpenSlides und keine Live-Statusanzeige
 - **Browser-Aufnahme:** Tab-Schließen oder Standby → IndexedDB-Puffer,
   Wake Lock, Warnungen.
 - **Akzeptanz und Mitbestimmung:** frühzeitig Betriebsrat und
-  Datenschutzbeauftragte einbinden (Kapitel 10).
+  Datenschutzbeauftragte einbinden (Kapitel 11).
 
 ---
 
-## 13. Offene Fragen
+## 14. Offene Fragen
 
 1. Wie viele Meetings pro Woche und wie lang sind sie? (Queue-Auslegung, GPU ja/nein)
 2. Gibt es eine verbindliche Protokollvorlage (Aufbau, Pflichtfelder) im Unternehmen?
